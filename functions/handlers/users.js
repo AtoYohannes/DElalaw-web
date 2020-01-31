@@ -61,7 +61,7 @@ exports.signUp = (request, response) => {
                 return response.status(400).json({ email: 'email is already in use' });
             }
             else {
-                return response.status(500).json({ error: err.code });
+                return response.status(500).json({ general: "Something went wrong, Please try again" });
 
             }
         })
@@ -90,7 +90,7 @@ exports.login = (request, response) => {
             if (err.code === "auth/wrong-password") {
                 return response.status(400).json({ general: 'Invalid Credentials' });
             } else {
-                return response.status(500).json({ error: err.code });
+                return response.status(500).json({ general: "Something went wrong, Please try again" });
             }
         });
 };
@@ -106,7 +106,7 @@ exports.addUserDetails = (request, response) => {
         })
         .catch((err) => {
             console.error(err);
-            return response.status(500).json({ error: err.code });
+            return response.status(500).json({ general: "Something went wrong, Please try again" });
         });
 };
 
@@ -176,20 +176,121 @@ exports.getAuthenticatedUser = (request, response) => {
         .then(doc => {
             if (doc.exists) {
                 userData.credentials = doc.data();
-                return db.collection('likes')
+                return db.collection('user_ratings')
                     .where('userHandle', '==', request.user.handle)
                     .get();
             }
         })
         .then(data => {
-            userData.likes = [];
+            userData.ratings = [];
             data.forEach(doc => {
-                userData.likes.push(doc.data());
+                userData.ratings.push(doc.data());
+            });
+
+            return db.collection('notifications').where('recipient', '==', request.user.handle).get();
+        })
+        .then((data) => {
+            userData.notifications = [];
+            data.forEach((doc) => {
+                userData.notifications.push({
+                    recipient: doc.data().recipient,
+                    sender: doc.data().sender,
+                    read: doc.data().read,
+                    itemId: doc.data().itemId,
+                    createdAt: doc.data().createdAt
+                });
             });
             return response.json(userData);
         })
         .catch(err => {
             console.error(err);
-            return response.status(500).json({ error: err.code });
+            return response.status(500).json({ general: "Something went wrong, Please try again" });
         });
 };
+
+// ===================== RATE USER ==============================?
+
+exports.rateUser = (req, res) => {
+    // if (req.body.description.trim() === '')
+    //     return res.status(400).json({ comment: 'Must not be empty' });
+
+    // const newRating = {
+    //     description: req.body.description,
+    //     createdAt: new Date().toISOString(),
+    //     userHandle: req.params.userId,
+    //     ratorHandle: req.user.handle,
+    //     userImage: req.user.imageUrl
+    // };
+    // console.log(newRating);
+
+    // db.doc(`/users/${req.params.userId}`)
+    //     .get()
+    //     .then((doc) => {
+    //         if (!doc.exists) {
+    //             return res.status(404).json({ error: 'user not found' });
+    //         }
+    //     })
+    //     .then(() => {
+    //         return db.collection('user_ratings').add(newRating);
+    //     })
+    //     .then(() => {
+    //         res.json(newRating);
+    //     })
+    //     .catch((err) => {
+    //         console.log(err);
+    //         res.status(500).json({ error: 'Something went wrong' });
+    //     });
+};
+// ===================== GETTING USER DETAIL ==============================?
+
+exports.getUserDetails = (request, response) => {
+    let userData = {};
+    db.doc(`/users/${request.params.handle}`).get()
+        .then(doc => {
+            if (doc.exists) {
+                userData.user = doc.data();
+                return db.collection('items').where('userHandle', '==', request.params.handle).get();
+            } else {
+                return response.status(404).json({ error: 'user not found' });
+            }
+        })
+        .then(data => {
+            userData.items = [];
+            data.forEach(doc => {
+                userData.items.push({
+                    itemName: doc.data().itemName,
+                    createdAt: doc.data().createdAt,
+                    likeCount: doc.data().likeCount,
+                    userImage: doc.data().userImage,
+                    userHandle: doc.data().userHandle,
+                    itemId: doc.id,
+                });
+            });
+            response.json(userData);
+        })
+        .catch(err => {
+            console.error(err);
+            return response.status(500).json({ general: "Something went wrong, Please try again" });
+        });
+};
+// ===================== MARK NOTIFICATION AS READ ==============================?
+
+exports.markNotificationRead = (request, response) => {
+    let batch = db.batch();
+    request.body.forEach((notificationId) => {
+        const notification = db.doc(`/notifications/${notificationId}`);
+        batch.update(notification, { read: true });
+    });
+    batch
+        .commit()
+        .then(() => {
+            return response.json({ message: 'Notifications marked as read' });
+        })
+        .catch((err) => {
+            console.error(err);
+            return response.status(500).json({ general: "Something went wrong, Please try again" });
+        });
+};
+
+// ===================== RATE USER ==============================?
+
